@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 
 const app = express();
 const prisma = new PrismaClient();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // 2 minutes trial (for testing)
 const TRIAL_MS = 2 * 60 * 1000;
@@ -27,7 +27,9 @@ async function getUser(userId) {
       },
     });
     console.log(`🟢 New user created: ${userId}`);
-    console.log(`🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`);
+    console.log(
+      `🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`
+    );
   }
 
   return user;
@@ -100,11 +102,17 @@ app.get("/status", async (req, res) => {
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
 
   console.log(`🟡 [/status] user: ${userId}`);
-  console.log("Trial started:", new Date(Number(user.trial_start)).toLocaleTimeString());
+  console.log(
+    "Trial started:",
+    new Date(Number(user.trial_start)).toLocaleTimeString()
+  );
   console.log("Trial expired:", trialExpired);
   console.log("License active:", user.license);
   if (user.license && user.license_activated_at) {
-    console.log("License activated at:", new Date(Number(user.license_activated_at)).toLocaleTimeString());
+    console.log(
+      "License activated at:",
+      new Date(Number(user.license_activated_at)).toLocaleTimeString()
+    );
   }
 
   res.json({
@@ -156,5 +164,5 @@ app.get("/activate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
