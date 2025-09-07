@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  user_id             String  @id
+  trial_start         BigInt
+  license             Boolean @default(false)
+  license_activated_at BigInt?
+}
+
