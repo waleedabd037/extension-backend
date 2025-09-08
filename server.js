@@ -6,8 +6,9 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
-// Trial and license durations (2 minutes for testing)
+// 2 minutes trial (for testing)
 const TRIAL_MS = 2 * 60 * 1000;
+// 2 minutes license duration (for testing)
 const LICENSE_MS = 2 * 60 * 1000;
 
 // ✅ Middleware: find or create user
@@ -54,6 +55,16 @@ async function checkAndUpdateLicense(userId) {
   return user;
 }
 
+// ✅ Root route
+app.get("/", (req, res) => {
+  res.send("🚀 Extension backend is running! Use /status, /activate, or /quillbot.js");
+});
+
+// ✅ Health check (for Railway or monitoring)
+app.get("/healthz", (req, res) => {
+  res.json({ success: true, message: "Service is healthy ✅" });
+});
+
 // ✅ Serve quillbot.js
 app.get("/quillbot.js", async (req, res) => {
   const { userId } = req.query;
@@ -62,7 +73,7 @@ app.get("/quillbot.js", async (req, res) => {
   const user = await checkAndUpdateLicense(userId);
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
 
-  console.log(`🟢 [/quillbot.js] user: ${userId}`);
+  console.log("🟢 [/quillbot.js] user:", userId);
   console.log("Trial expired:", trialExpired, "License:", user.license);
 
   if (!trialExpired || user.license) {
@@ -107,7 +118,6 @@ app.get("/status", async (req, res) => {
   );
   console.log("Trial expired:", trialExpired);
   console.log("License active:", user.license);
-
   if (user.license && user.license_activated_at) {
     console.log(
       "License activated at:",
@@ -163,7 +173,6 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-// ✅ Start server
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
