@@ -1,10 +1,14 @@
 import express from "express";
 import fetch from "node-fetch";
+import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 
 const app = express();
 const prisma = new PrismaClient();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT; // 🚀 Railway provides this port
+
+// Enable CORS
+app.use(cors());
 
 // 2 minutes trial (for testing)
 const TRIAL_MS = 2 * 60 * 1000;
@@ -173,6 +177,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-app.listen(PORT, () => {
+// 🚀 Railway fix
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
