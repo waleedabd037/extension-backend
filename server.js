@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import fetch from "node-fetch";
 import { PrismaClient } from "@prisma/client";
@@ -6,10 +7,23 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
-// 2 minutes trial (for testing)
-const TRIAL_MS = 2 * 60 * 1000;
-// 2 minutes license duration (for testing)
-const LICENSE_MS = 2 * 60 * 1000;
+// --- Fix BigInt serialization globally ---
+BigInt.prototype.toJSON = function () {
+  return Number(this);
+};
+
+// --- Global error handlers (so app doesn't die silently) ---
+process.on("unhandledRejection", (reason, p) => {
+  console.error("Unhandled Rejection at:", p, "reason:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
+
+// Trial + License times (for testing)
+const TRIAL_MS = 2 * 60 * 1000;   // 2 minutes
+const LICENSE_MS = 2 * 60 * 1000; // 2 minutes
 
 // ✅ Middleware: find or create user
 async function getUser(userId) {
@@ -43,7 +57,6 @@ async function checkAndUpdateLicense(userId) {
     const expired =
       Date.now() - Number(user.license_activated_at) > LICENSE_MS;
     if (expired) {
-      // Auto reset in DB
       user = await prisma.user.update({
         where: { user_id: userId },
         data: { license: false, license_activated_at: null },
@@ -57,7 +70,9 @@ async function checkAndUpdateLicense(userId) {
 
 // ✅ Root route
 app.get("/", (req, res) => {
-  res.send("🚀 Extension backend is running! Use /status, /activate, or /quillbot.js");
+  res.send(
+    "🚀 Extension backend is running! Use /status, /activate, or /quillbot.js"
+  );
 });
 
 // ✅ Health check (for Railway or monitoring)
@@ -173,6 +188,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+// ✅ Important: Bind to 0.0.0.0 for Railway
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
 });
