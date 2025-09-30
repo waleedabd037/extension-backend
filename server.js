@@ -9,8 +9,15 @@ const prisma = new PrismaClient();
 // ✅ Use Railway’s port OR fallback to 3000 locally
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS
-app.use(cors());
+// ✅ Extension ID (your Chrome extension)
+const EXTENSION_ID = "gnelnhoopmbhimlphemkakkgdiibaaka";
+
+// ✅ Allow only your extension to call backend
+app.use(
+  cors({
+    origin: [`chrome-extension://${EXTENSION_ID}`],
+  })
+);
 
 // 2 minutes trial (for testing)
 const TRIAL_MS = 2 * 60 * 1000;
