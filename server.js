@@ -12,10 +12,13 @@ const PORT = process.env.PORT || 3000;
 // ✅ Extension ID (your Chrome extension)
 const EXTENSION_ID = "gnelnhoopmbhimlphemkakkgdiibaaka";
 
-// ✅ Allow only your extension to call backend
+// ✅ Allow extension + browser (for testing)
 app.use(
   cors({
-    origin: [`chrome-extension://${EXTENSION_ID}`],
+    origin: [
+      "*", // allow normal browser requests for testing
+      `chrome-extension://${EXTENSION_ID}`, // allow extension requests
+    ],
   })
 );
 
@@ -40,7 +43,9 @@ async function getUser(userId) {
       },
     });
     console.log(`🟢 New user created: ${userId}`);
-    console.log(`🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`);
+    console.log(
+      `🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`
+    );
   }
 
   return user;
@@ -67,12 +72,23 @@ async function checkAndUpdateLicense(userId) {
 
 // ✅ Root route
 app.get("/", (req, res) => {
-  res.send("🚀 Extension backend is running! Use /status, /activate, or /quillbot.js");
+  res.send(
+    "🚀 Extension backend is running! Use /test, /status, /activate, or /quillbot.js"
+  );
 });
 
 // ✅ Health check (for Railway or monitoring)
 app.get("/healthz", (req, res) => {
   res.json({ success: true, message: "Service is healthy ✅" });
+});
+
+// ✅ Simple test route (always works in browser & extension)
+app.get("/test", (req, res) => {
+  res.send(`
+    <h1>✅ Backend is alive!</h1>
+    <p>Time: ${new Date().toLocaleString()}</p>
+    <p>Extension ID allowed: ${EXTENSION_ID}</p>
+  `);
 });
 
 // ✅ Serve quillbot.js
@@ -88,14 +104,18 @@ app.get("/quillbot.js", async (req, res) => {
 
   if (!trialExpired || user.license) {
     try {
-      const response = await fetch("https://ragug.github.io/quillbot-premium-free/quillbot.js");
+      const response = await fetch(
+        "https://ragug.github.io/quillbot-premium-free/quillbot.js"
+      );
       const script = await response.text();
 
       console.log("✅ Served REAL script");
       res.type("application/javascript").send(script);
     } catch (err) {
       console.error("❌ Failed to fetch script:", err);
-      res.type("application/javascript").send(`alert("Error loading script: ${err.message}")`);
+      res
+        .type("application/javascript")
+        .send(`alert("Error loading script: ${err.message}")`);
     }
   } else {
     console.log("⛔ Trial expired and no valid license");
@@ -116,11 +136,17 @@ app.get("/status", async (req, res) => {
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
 
   console.log(`🟡 [/status] user: ${userId}`);
-  console.log("Trial started:", new Date(Number(user.trial_start)).toLocaleTimeString());
+  console.log(
+    "Trial started:",
+    new Date(Number(user.trial_start)).toLocaleTimeString()
+  );
   console.log("Trial expired:", trialExpired);
   console.log("License active:", user.license);
   if (user.license && user.license_activated_at) {
-    console.log("License activated at:", new Date(Number(user.license_activated_at)).toLocaleTimeString());
+    console.log(
+      "License activated at:",
+      new Date(Number(user.license_activated_at)).toLocaleTimeString()
+    );
   }
 
   res.json({
@@ -128,7 +154,9 @@ app.get("/status", async (req, res) => {
     trialExpired,
     license: user.license,
     trialStart: Number(user.trial_start),
-    licenseActivatedAt: user.license_activated_at ? Number(user.license_activated_at) : null,
+    licenseActivatedAt: user.license_activated_at
+      ? Number(user.license_activated_at)
+      : null,
   });
 });
 
