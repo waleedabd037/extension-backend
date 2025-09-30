@@ -5,7 +5,9 @@ import { PrismaClient } from "@prisma/client";
 
 const app = express();
 const prisma = new PrismaClient();
-const PORT = process.env.PORT; // 🚀 Railway provides this port
+
+// ✅ Use Railway’s port OR fallback to 3000 locally
+const PORT = process.env.PORT || 3000;
 
 // Enable CORS
 app.use(cors());
@@ -31,9 +33,7 @@ async function getUser(userId) {
       },
     });
     console.log(`🟢 New user created: ${userId}`);
-    console.log(
-      `🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`
-    );
+    console.log(`🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`);
   }
 
   return user;
@@ -44,8 +44,7 @@ async function checkAndUpdateLicense(userId) {
   let user = await getUser(userId);
 
   if (user.license && user.license_activated_at) {
-    const expired =
-      Date.now() - Number(user.license_activated_at) > LICENSE_MS;
+    const expired = Date.now() - Number(user.license_activated_at) > LICENSE_MS;
     if (expired) {
       // Auto reset in DB
       user = await prisma.user.update({
@@ -82,18 +81,14 @@ app.get("/quillbot.js", async (req, res) => {
 
   if (!trialExpired || user.license) {
     try {
-      const response = await fetch(
-        "https://ragug.github.io/quillbot-premium-free/quillbot.js"
-      );
+      const response = await fetch("https://ragug.github.io/quillbot-premium-free/quillbot.js");
       const script = await response.text();
 
       console.log("✅ Served REAL script");
       res.type("application/javascript").send(script);
     } catch (err) {
       console.error("❌ Failed to fetch script:", err);
-      res
-        .type("application/javascript")
-        .send(`alert("Error loading script: ${err.message}")`);
+      res.type("application/javascript").send(`alert("Error loading script: ${err.message}")`);
     }
   } else {
     console.log("⛔ Trial expired and no valid license");
@@ -107,26 +102,18 @@ app.get("/quillbot.js", async (req, res) => {
 app.get("/status", async (req, res) => {
   const { userId } = req.query;
   if (!userId) {
-    return res
-      .status(400)
-      .json({ success: false, error: "Missing userId" });
+    return res.status(400).json({ success: false, error: "Missing userId" });
   }
 
   const user = await checkAndUpdateLicense(userId);
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
 
   console.log(`🟡 [/status] user: ${userId}`);
-  console.log(
-    "Trial started:",
-    new Date(Number(user.trial_start)).toLocaleTimeString()
-  );
+  console.log("Trial started:", new Date(Number(user.trial_start)).toLocaleTimeString());
   console.log("Trial expired:", trialExpired);
   console.log("License active:", user.license);
   if (user.license && user.license_activated_at) {
-    console.log(
-      "License activated at:",
-      new Date(Number(user.license_activated_at)).toLocaleTimeString()
-    );
+    console.log("License activated at:", new Date(Number(user.license_activated_at)).toLocaleTimeString());
   }
 
   res.json({
@@ -134,9 +121,7 @@ app.get("/status", async (req, res) => {
     trialExpired,
     license: user.license,
     trialStart: Number(user.trial_start),
-    licenseActivatedAt: user.license_activated_at
-      ? Number(user.license_activated_at)
-      : null,
+    licenseActivatedAt: user.license_activated_at ? Number(user.license_activated_at) : null,
   });
 });
 
@@ -144,9 +129,7 @@ app.get("/status", async (req, res) => {
 app.get("/activate", async (req, res) => {
   const { userId, licenseKey } = req.query;
   if (!userId || !licenseKey) {
-    return res
-      .status(400)
-      .json({ success: false, error: "Missing params" });
+    return res.status(400).json({ success: false, error: "Missing params" });
   }
 
   if (licenseKey === "TEST-1234") {
@@ -177,7 +160,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-// 🚀 Railway fix
+// 🚀 Works on both Railway & Local
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
