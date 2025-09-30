@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 // 2 minutes trial (for testing)
-const TRIAL_MS = 1 * 60 * 1000;
+const TRIAL_MS = 2 * 60 * 1000;
 // 2 minutes license duration (for testing)
 const LICENSE_MS = 2 * 60 * 1000;
 
