@@ -135,7 +135,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-// ✅ Start server on 0.0.0.0 (required for Render)
+//; ✅ Start server on 0.0.0.0 (required for Render)
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
