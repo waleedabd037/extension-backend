@@ -94,7 +94,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: true, message: "License activated (valid for 2 minutes)" });
 });
 
-app.get("/test", (_, res) => res.send("✅ backend running"));
+app.get("/test", (_, res) => res.send("✅ bacckend running"));
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server started on port ${PORT}`);
