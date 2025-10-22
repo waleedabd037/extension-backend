@@ -1,6 +1,12 @@
 import express from "express";
 import fetch from "node-fetch";
 import { PrismaClient } from "@prisma/client";
+import cors from "cors";
+
+app.use(cors({
+  origin: "https://quillbot.com",  // The site you are injecting into
+  credentials: true,
+}));
 
 const app = express();
 const prisma = new PrismaClient();
