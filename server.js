@@ -3,36 +3,27 @@ import fetch from "node-fetch";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
 
-const app = express(); // ✅ must be defined first
+const app = express();
 const prisma = new PrismaClient();
 
-// ✅ Enable CORS
-app.use(cors({
-  origin: "https://quillbot.com",  // The site you are injecting into
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: ["https://quillbot.com", "chrome-extension://*"],
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
 
 app.use(express.json());
-
-// ✅ Use Render’s port (important for Render)
 const PORT = process.env.PORT || 3000;
 
-// Test route (helps check if Render works)
-app.get("/test", (req, res) => {
-  res.send("✅ Render server is working!");
-});
-
-// 2 minutes trial (for testing)
+// 🧩 Time limits
 const TRIAL_MS = 2 * 60 * 1000;
-// 2 minutes license duration (for testing)
 const LICENSE_MS = 2 * 60 * 1000;
 
-// ✅ Middleware: find or create user
+// 🧩 Get or create user
 async function getUser(userId) {
-  let user = await prisma.user.findUnique({
-    where: { user_id: userId },
-  });
-
+  let user = await prisma.user.findUnique({ where: { user_id: userId } });
   if (!user) {
     const trialStart = Date.now();
     user = await prisma.user.create({
@@ -42,17 +33,14 @@ async function getUser(userId) {
         license: false,
       },
     });
-    console.log(`🟢 New user created: ${userId}`);
-    console.log(`🟡 Trial started at: ${new Date(trialStart).toLocaleTimeString()}`);
+    console.log("🟢 Created user:", userId);
   }
-
   return user;
 }
 
-// ✅ Helper: check license validity (and reset DB if expired)
-async function checkAndUpdateLicense(userId) {
+// 🧩 Check expiry
+async function checkLicense(userId) {
   let user = await getUser(userId);
-
   if (user.license && user.license_activated_at) {
     const expired = Date.now() - Number(user.license_activated_at) > LICENSE_MS;
     if (expired) {
@@ -60,91 +48,81 @@ async function checkAndUpdateLicense(userId) {
         where: { user_id: userId },
         data: { license: false, license_activated_at: null },
       });
-      console.log(`🔴 License expired for user ${userId}, reset in DB`);
+      console.log("🔴 License expired:", userId);
     }
   }
-
   return user;
 }
 
-// ✅ Serve quillbot.js
+// 🧩 Serve main script
 app.get("/quillbot.js", async (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).send("Missing userId");
 
-  const user = await checkAndUpdateLicense(userId);
+  const user = await checkLicense(userId);
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
-
-  console.log("🟢 [/quillbot.js] user:", userId);
-  console.log("Trial expired:", trialExpired, "License:", user.license);
 
   if (!trialExpired || user.license) {
     try {
-      const response = await fetch("https://ragug.github.io/quillbot-premium-free/quillbot.js");
+      const response = await fetch(
+        "https://ragug.github.io/quillbot-premium-free/quillbot.js"
+      );
       const script = await response.text();
-      res.type("application/javascript").send(script);
+      res.setHeader("Content-Type", "application/javascript");
+      res.send(script);
     } catch (err) {
-      console.error("❌ Failed to fetch script:", err);
-      res.type("application/javascript").send(`alert("Error loading script: ${err.message}")`);
+      res.type("application/javascript").send(
+        `alert("Error loading script: ${err.message}")`
+      );
     }
   } else {
-    res.type("application/javascript").send(`
-      alert("Your free trial or license has ended. Please purchase a new license.");
-    `);
+    res.type("application/javascript").send(
+      `alert("Trial or license expired. Please renew.")`
+    );
   }
 });
 
-// ✅ Status check
+// 🧩 Status check
 app.get("/status", async (req, res) => {
   const { userId } = req.query;
-  if (!userId) {
+  if (!userId)
     return res.status(400).json({ success: false, error: "Missing userId" });
-  }
 
-  const user = await checkAndUpdateLicense(userId);
+  const user = await checkLicense(userId);
   const trialExpired = Date.now() - Number(user.trial_start) > TRIAL_MS;
 
   res.json({
     success: true,
     trialExpired,
     license: user.license,
-    trialStart: Number(user.trial_start),
-    licenseActivatedAt: user.license_activated_at ? Number(user.license_activated_at) : null,
   });
 });
 
-// ✅ Activate license
+// 🧩 Activate license
 app.get("/activate", async (req, res) => {
   const { userId, licenseKey } = req.query;
-  if (!userId || !licenseKey) {
+  if (!userId || !licenseKey)
     return res.status(400).json({ success: false, error: "Missing params" });
-  }
 
   if (licenseKey === "TEST-1234") {
-    await getUser(userId);
     const activatedAt = Date.now();
-    const user = await prisma.user.update({
+    await getUser(userId);
+    await prisma.user.update({
       where: { user_id: userId },
       data: {
         license: true,
         license_activated_at: BigInt(activatedAt),
       },
     });
-
-    const expiresAt = activatedAt + LICENSE_MS;
-
     return res.json({
       success: true,
       message: "License activated (valid for 2 minutes)",
-      activatedAt,
-      expiresAt,
     });
   }
-
   res.json({ success: false, error: "Invalid license key" });
 });
 
-// ✅ Start server on 0.0.0.0 (required for Render)
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
-});
+app.get("/test", (_, res) => res.send("✅ Render backend active!"));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`✅ Running on port ${PORT}`)
+);
