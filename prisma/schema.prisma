@@ -10,8 +10,6 @@ datasource db {
 model User {
   user_id              String  @id
   trial_start          BigInt
-  trial_ended_logged   Boolean @default(false)
   license              Boolean @default(false)
   license_activated_at BigInt?
-  license_ended_logged Boolean @default(false)
 }
