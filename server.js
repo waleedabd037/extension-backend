@@ -1,9 +1,12 @@
-// server.js - in-memory backend for testing with logging of trial start/end and license activation/end
+// server.js — Persistent QuillBot backend using your PostgreSQL schema
 import express from "express";
 import cors from "cors";
+import { PrismaClient } from "@prisma/client";
 
 const app = express();
-app.use(cors()); // allow all origins for testing
+const prisma = new PrismaClient();
+
+app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
@@ -12,115 +15,118 @@ const PORT = process.env.PORT || 3000;
 const TRIAL_MS = 2 * 60 * 1000;   // 2 minutes trial
 const LICENSE_MS = 2 * 60 * 1000; // 2 minutes license
 
-// in-memory store
-// structure: users[userId] = {
-//   trialStart: number,        // ms timestamp
-//   trialEndedLogged: boolean, // true after we've logged the end
-//   licenseKey: string|null,
-//   licenseActivatedAt: number|null,
-//   licenseEndedLogged: boolean
-// }
-const users = Object.create(null);
+// 🟢 Ensure user exists (and start trial if first time)
+async function ensureUser(userId) {
+  let user = await prisma.user.findUnique({ where: { user_id: userId } });
 
-function ensureUser(userId) {
-  if (!users[userId]) {
-    users[userId] = {
-      trialStart: Date.now(),
-      trialEndedLogged: false,
-      licenseKey: null,
-      licenseActivatedAt: null,
-      licenseEndedLogged: false
-    };
-    console.log(`🟢 [server] Trial started for user ${userId} at ${new Date(users[userId].trialStart).toISOString()}`);
+  if (!user) {
+    const now = Date.now();
+    user = await prisma.user.create({
+      data: {
+        user_id: userId,
+        trial_start: BigInt(now),
+        license: false,
+      },
+    });
+    console.log(`🟢 Trial started for user ${userId} at ${new Date(Number(user.trial_start)).toISOString()}`);
   }
-  return users[userId];
+
+  return user;
 }
 
-// Helper to check and log expirations
-function evaluateAndLog(userId) {
-  const u = users[userId];
-  const now = Date.now();
+// 🔍 Evaluate and log trial/license status
+async function evaluateAndLog(userId) {
+  const user = await prisma.user.findUnique({ where: { user_id: userId } });
+  if (!user) return { trialExpired: false, licenseActive: false };
 
-  // Trial
-  const trialExpired = now - u.trialStart > TRIAL_MS;
-  if (trialExpired && !u.trialEndedLogged) {
-    u.trialEndedLogged = true;
-    console.log(`🔴 [server] Trial ended for user ${userId} at ${new Date(now).toISOString()} (started at ${new Date(u.trialStart).toISOString()})`);
+  const now = Date.now();
+  const trialExpired = now - Number(user.trial_start) > TRIAL_MS;
+
+  if (trialExpired && !user.license) {
+    console.log(`🔴 Trial expired for user ${userId} at ${new Date(now).toISOString()}`);
   }
 
-  // License
   let licenseActive = false;
-  if (u.licenseKey && u.licenseActivatedAt) {
-    licenseActive = now - u.licenseActivatedAt <= LICENSE_MS;
-    if (!licenseActive && !u.licenseEndedLogged) {
-      u.licenseEndedLogged = true;
-      console.log(`🔴 [server] License ended for user ${userId} at ${new Date(now).toISOString()} (activated at ${new Date(u.licenseActivatedAt).toISOString()})`);
+  if (user.license && user.license_activated_at) {
+    licenseActive = now - Number(user.license_activated_at) <= LICENSE_MS;
+    if (!licenseActive) {
+      await prisma.user.update({
+        where: { user_id: userId },
+        data: { license: false },
+      });
+      console.log(`🔴 License expired for user ${userId} at ${new Date(now).toISOString()}`);
     }
   }
 
   return { trialExpired, licenseActive };
 }
 
-// test endpoint
-app.get("/test", (_, res) => res.send("✅ backend running"));
-
-// status endpoint
-app.get("/status", (req, res) => {
+// 🧠 API: status
+app.get("/status", async (req, res) => {
   const userId = req.query.userId;
   if (!userId) return res.status(400).json({ success: false, error: "Missing userId" });
 
-  ensureUser(userId);
-  const { trialExpired, licenseActive } = evaluateAndLog(userId);
+  const user = await ensureUser(userId);
+  const { trialExpired, licenseActive } = await evaluateAndLog(userId);
 
   res.json({
     success: true,
     trialExpired,
     license: licenseActive,
-    trialStart: users[userId].trialStart,
-    licenseActivatedAt: users[userId].licenseActivatedAt
+    trialStart: Number(user.trial_start),
+    licenseActivatedAt: user.license_activated_at ? Number(user.license_activated_at) : null,
   });
 });
 
-// activate license
-app.get("/activate", (req, res) => {
+// 🧠 API: activate license
+app.get("/activate", async (req, res) => {
   const { userId, licenseKey } = req.query;
   if (!userId || !licenseKey) return res.status(400).json({ success: false, error: "Missing params" });
 
-  // for demo: accept TEST-1234 or any "KEY-..." string
+  // accept only valid-looking license keys
   const valid = licenseKey === "TEST-1234" || licenseKey.startsWith("KEY-");
   if (!valid) return res.json({ success: false, error: "Invalid license key" });
 
-  const u = ensureUser(userId);
+  await ensureUser(userId);
+
   const now = Date.now();
-  u.licenseKey = licenseKey;
-  u.licenseActivatedAt = now;
-  u.licenseEndedLogged = false; // reset end-log so ending will be logged later
-  console.log(`🟢 [server] License activated for user ${userId} at ${new Date(now).toISOString()} with key="${licenseKey}"`);
+  await prisma.user.update({
+    where: { user_id: userId },
+    data: {
+      license: true,
+      license_activated_at: BigInt(now),
+    },
+  });
+
+  console.log(`🟢 License activated for user ${userId} at ${new Date(now).toISOString()} with key="${licenseKey}"`);
 
   res.json({
     success: true,
     message: "License activated (valid for 2 minutes)",
-    activatedAt: u.licenseActivatedAt
+    activatedAt: now,
   });
 });
 
-// optionally proxy quillbot loader (unchanged)
-// returns JS if trial active or license active
+// 🧠 API: test endpoint
+app.get("/test", (_, res) => res.send("✅ backend running"));
+
+// 🧠 Optional: Proxy quillbot loader
 app.get("/quillbot.js", async (req, res) => {
-  const userId = req.query.userId;
+  const { userId } = req.query;
   if (!userId) return res.status(400).send("Missing userId");
-  ensureUser(userId);
-  const { trialExpired, licenseActive } = evaluateAndLog(userId);
+
+  await ensureUser(userId);
+  const { trialExpired, licenseActive } = await evaluateAndLog(userId);
 
   if (!trialExpired || licenseActive) {
     try {
-      const nodeFetch = (await import('node-fetch')).default;
+      const nodeFetch = (await import("node-fetch")).default;
       const upstream = await nodeFetch("https://ragug.github.io/quillbot-premium-free/quillbot.js");
       const txt = await upstream.text();
       res.setHeader("Content-Type", "application/javascript");
       return res.send(txt);
     } catch (err) {
-      console.error("[server] failed proxying loader", err);
+      console.error("[server] Failed to load upstream script:", err);
       res.setHeader("Content-Type", "application/javascript");
       return res.send(`console.error("Failed to load upstream loader: ${String(err)}");`);
     }
