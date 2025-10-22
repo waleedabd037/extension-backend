@@ -3,13 +3,16 @@ import fetch from "node-fetch";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
 
+const app = express(); // ✅ must be defined first
+const prisma = new PrismaClient();
+
+// ✅ Enable CORS
 app.use(cors({
   origin: "https://quillbot.com",  // The site you are injecting into
   credentials: true,
 }));
 
-const app = express();
-const prisma = new PrismaClient();
+app.use(express.json());
 
 // ✅ Use Render’s port (important for Render)
 const PORT = process.env.PORT || 3000;
@@ -141,7 +144,7 @@ app.get("/activate", async (req, res) => {
   res.json({ success: false, error: "Invalid license key" });
 });
 
-//; ✅ Start server on 0.0.0.0 (required for Render)
+// ✅ Start server on 0.0.0.0 (required for Render)
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
